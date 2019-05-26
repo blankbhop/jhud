@@ -15,10 +15,6 @@ public Plugin myinfo =
 
 #define JHUD_INTERVAL 15
 #define l1 "#l1"
-#define l2 "#l2"
-#define l3 "#l3"
-#define l4 "#l4"
-#define l5 "#l5"
 
 Handle gH_JHUDCookie;
 bool gB_JHUD[MAXPLAYERS + 1] = {false, ...};
