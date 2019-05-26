@@ -6,7 +6,7 @@
 
 public Plugin myinfo =
 {
-	name = "[shavit] jhud",
+	name = "jhud",
 	author = "Blank",
 	description = "Center of screen SSJ",
 	version = "0.9",
@@ -39,8 +39,6 @@ public void OnAllPluginsLoaded()
 
 public void OnPluginStart()
 {
-	LoadTranslations("shavit-jhud.phrases");
-	
 	RegConsoleCmd("sm_jhud", Command_JHUD, "Toggles JHUD");
    
 	gH_JHUDCookie = RegClientCookie("JHUD_enabled", "JHUD_enabled", CookieAccess_Protected);
