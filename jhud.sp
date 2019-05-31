@@ -13,7 +13,7 @@ public Plugin myinfo =
 	url = ""
 };
 
-#define JHUD_INTERVAL 15
+#define JHUD_INTERVAL 10
 #define l1 "#l1"
 
 Handle gH_JHUDCookie;
@@ -237,70 +237,158 @@ void JHUD_DrawStats(int client, int target)
 	coeffsum = RoundToFloor(coeffsum * 100.0 + 0.5) / 100.0;
 
 	int r, g, b;
-	if (g_iJump[target] == 1 && RoundToFloor(GetVectorLength(velocity)) < 280)
-		r = 255, g = 0, b = 0;
-	else if (g_iJump[target] == 1 && RoundToFloor(GetVectorLength(velocity)) >= 280 && RoundToFloor(GetVectorLength(velocity)) <= 281)
-		r = 255, g = 165, b = 0;
-	else if (g_iJump[target] == 1 && RoundToFloor(GetVectorLength(velocity)) > 281 && RoundToFloor(GetVectorLength(velocity)) <= 286)
-		r = 0, g = 255, b = 0;
-	else if (g_iJump[target] == 1 && RoundToFloor(GetVectorLength(velocity)) > 286)
-		r = 0, g = 191, b = 255;
-	else if (g_iJump[target] == 2 && RoundToFloor(GetVectorLength(velocity)) < 365)
-		r = 255, g = 0, b = 0;
-	else if (g_iJump[target] == 2 && RoundToFloor(GetVectorLength(velocity)) >= 365 && RoundToFloor(GetVectorLength(velocity)) <= 369)
-		r = 255, g = 165, b = 0;
-	else if (g_iJump[target] == 2 && RoundToFloor(GetVectorLength(velocity)) > 369 && RoundToFloor(GetVectorLength(velocity)) <= 374)
-		r = 0, g = 255, b = 0;
-	else if (g_iJump[target] == 2 && RoundToFloor(GetVectorLength(velocity)) > 374)
-		r = 0, g = 191, b = 255;
-	else if (g_iJump[target] == 3 && RoundToFloor(GetVectorLength(velocity)) < 438)
-		r = 255, g = 0, b = 0;
-	else if (g_iJump[target] == 3 && RoundToFloor(GetVectorLength(velocity)) >= 438 && RoundToFloor(GetVectorLength(velocity)) <= 441)
-		r = 255, g = 165, b = 0;
-	else if (g_iJump[target] == 3 && RoundToFloor(GetVectorLength(velocity)) > 441 && RoundToFloor(GetVectorLength(velocity)) <= 449)
-		r = 0, g = 255, b = 0;
-	else if (g_iJump[target] == 3 && RoundToFloor(GetVectorLength(velocity)) > 449)
-		r = 0, g = 191, b = 255;
-	else if (g_iJump[target] == 4 && RoundToFloor(GetVectorLength(velocity)) < 500)
-		r = 255, g = 0, b = 0;
-	else if (g_iJump[target] == 4 && RoundToFloor(GetVectorLength(velocity)) >= 500 && RoundToFloor(GetVectorLength(velocity)) <= 504)
-		r = 255, g = 165, b = 0;
-	else if (g_iJump[target] == 4 && RoundToFloor(GetVectorLength(velocity)) > 504 && RoundToFloor(GetVectorLength(velocity)) <= 514)
-		r = 0, g = 255, b = 0;
-	else if (g_iJump[target] == 4 && RoundToFloor(GetVectorLength(velocity)) > 514)
-		r = 0, g = 191, b = 255;
-	else if (g_iJump[target] == 5 && RoundToFloor(GetVectorLength(velocity)) < 555)
-		r = 255, g = 0, b = 0;
-	else if (g_iJump[target] == 5 && RoundToFloor(GetVectorLength(velocity)) >= 555 && RoundToFloor(GetVectorLength(velocity)) <= 559)
-		r = 255, g = 165, b = 0;
-	else if (g_iJump[target] == 5 && RoundToFloor(GetVectorLength(velocity)) > 559 && RoundToFloor(GetVectorLength(velocity)) <= 569)
-		r = 0, g = 255, b = 0;
-	else if (g_iJump[target] == 5 && RoundToFloor(GetVectorLength(velocity)) > 569)
-		r = 0, g = 191, b = 255;
-	else if (g_iJump[target] == 6 && RoundToFloor(GetVectorLength(velocity)) < 605)
-		r = 255, g = 0, b = 0;
-	else if (g_iJump[target] == 6 && RoundToFloor(GetVectorLength(velocity)) >= 605 && RoundToFloor(GetVectorLength(velocity)) <= 609)
-		r = 255, g = 165, b = 0;
-	else if (g_iJump[target] == 6 && RoundToFloor(GetVectorLength(velocity)) > 609 && RoundToFloor(GetVectorLength(velocity)) <= 619)
-		r = 0, g = 255, b = 0;
-	else if (g_iJump[target] == 6 && RoundToFloor(GetVectorLength(velocity)) > 619)
-		r = 0, g = 191, b = 255;
-	else if (g_iJump[target] == 16 && RoundToFloor(GetVectorLength(velocity)) < 965)
-		r = 255, g = 0, b = 0;
-	else if (g_iJump[target] == 16 && RoundToFloor(GetVectorLength(velocity)) >= 965 && RoundToFloor(GetVectorLength(velocity)) <= 979)
-		r = 255, g = 165, b = 0;
-	else if (g_iJump[target] == 16 && RoundToFloor(GetVectorLength(velocity)) > 979 && RoundToFloor(GetVectorLength(velocity)) <= 999)
-		r = 0, g = 255, b = 0;
-	else if (g_iJump[target] == 16 && RoundToFloor(GetVectorLength(velocity)) > 999)
-		r = 0, g = 191, b = 255;
-	else if (g_iJump[target] > 6 && coeffsum < 60)
-		r = 255, g = 0, b = 0;
-	else if (g_iJump[target] > 6 && coeffsum >= 60 && coeffsum < 70)
-		r = 255, g = 165, b = 0;
-	else if (g_iJump[target] > 6 && coeffsum >= 70 && coeffsum < 80)
-		r = 0, g = 255, b = 0;
-	else if (g_iJump[target] > 6 && coeffsum >= 80)
-		r = 0, g = 191, b = 255;
+	if (g_iJump[target] == 1)
+	{
+		if (RoundToFloor(GetVectorLength(velocity)) <= 279)
+		{
+			r = 255, g = 0, b = 0;
+		}
+		else if (RoundToFloor(GetVectorLength(velocity)) >= 280 && RoundToFloor(GetVectorLength(velocity)) <= 281)
+		{
+			r = 255, g = 165, b = 0;
+		}
+		else if (RoundToFloor(GetVectorLength(velocity)) >= 282 && RoundToFloor(GetVectorLength(velocity)) <= 286)
+		{
+			r = 0, g = 255, b = 0;
+		}
+		else
+		{
+			r = 0, g = 191, b = 255;
+		}
+	}
+	else if (g_iJump[target] == 2)
+	{
+		if (RoundToFloor(GetVectorLength(velocity)) <= 364)
+		{
+			r = 255, g = 0, b = 0;
+		}
+		else if (RoundToFloor(GetVectorLength(velocity)) >= 365 && RoundToFloor(GetVectorLength(velocity)) <= 369)
+		{
+			r = 255, g = 165, b = 0;
+		}
+		else if (RoundToFloor(GetVectorLength(velocity)) >= 370 && RoundToFloor(GetVectorLength(velocity)) <= 374)
+		{
+			r = 0, g = 255, b = 0;
+		}
+		else
+		{
+			r = 0, g = 191, b = 255;
+		}
+	}
+	else if (g_iJump[target] == 3)
+	{
+		if (RoundToFloor(GetVectorLength(velocity)) <= 437)
+		{
+			r = 255, g = 0, b = 0;
+		}
+		else if (RoundToFloor(GetVectorLength(velocity)) >= 438 && RoundToFloor(GetVectorLength(velocity)) <= 441)
+		{
+			r = 255, g = 165, b = 0;
+		}
+		else if (RoundToFloor(GetVectorLength(velocity)) >= 442 && RoundToFloor(GetVectorLength(velocity)) <= 449)
+		{
+			r = 0, g = 255, b = 0;
+		}
+		else
+		{
+			r = 0, g = 191, b = 255;
+		}
+	}
+	else if (g_iJump[target] == 4)
+	{
+		if (RoundToFloor(GetVectorLength(velocity)) <= 499)
+		{
+			r = 255, g = 0, b = 0;
+		}
+		else if (RoundToFloor(GetVectorLength(velocity)) >= 500 && RoundToFloor(GetVectorLength(velocity)) <= 504)
+		{
+			r = 255, g = 165, b = 0;
+		}
+		else if (RoundToFloor(GetVectorLength(velocity)) >= 505 && RoundToFloor(GetVectorLength(velocity)) <= 514)
+		{
+			r = 0, g = 255, b = 0;
+		}
+		else
+		{
+			r = 0, g = 191, b = 255;
+		}
+	}
+	else if (g_iJump[target] == 5)
+	{
+		if (RoundToFloor(GetVectorLength(velocity)) <= 554)
+		{
+			r = 255, g = 0, b = 0;
+		}
+		else if (RoundToFloor(GetVectorLength(velocity)) >= 555 && RoundToFloor(GetVectorLength(velocity)) <= 559)
+		{
+			r = 255, g = 165, b = 0;
+		}
+		else if (RoundToFloor(GetVectorLength(velocity)) >= 560 && RoundToFloor(GetVectorLength(velocity)) <= 569)
+		{
+			r = 0, g = 255, b = 0;
+		}
+		else
+		{
+			r = 0, g = 191, b = 255;
+		}
+	}
+	else if (g_iJump[target] == 6)
+	{
+		if (RoundToFloor(GetVectorLength(velocity)) <= 604)
+		{
+			r = 255, g = 0, b = 0;
+		}
+		else if (RoundToFloor(GetVectorLength(velocity)) >= 605 && RoundToFloor(GetVectorLength(velocity)) <= 609)
+		{
+			r = 255, g = 165, b = 0;
+		}
+		else if (RoundToFloor(GetVectorLength(velocity)) >= 610 && RoundToFloor(GetVectorLength(velocity)) <= 619)
+		{
+			r = 0, g = 255, b = 0;
+		}
+		else
+		{
+			r = 0, g = 191, b = 255;
+		}
+	}
+	else if (g_iJump[target] == 16)
+	{
+		if (RoundToFloor(GetVectorLength(velocity)) <= 964)
+		{
+			r = 255, g = 0, b = 0;
+		}
+		else if (RoundToFloor(GetVectorLength(velocity)) >= 965 && RoundToFloor(GetVectorLength(velocity)) <= 979)
+		{
+			r = 255, g = 165, b = 0;
+		}
+		else if (RoundToFloor(GetVectorLength(velocity)) >= 980 && RoundToFloor(GetVectorLength(velocity)) <= 999)
+		{
+			r = 0, g = 255, b = 0;
+		}
+		else
+		{
+			r = 0, g = 191, b = 255;
+		}
+	}
+	else
+	{
+		if (coeffsum <= 59)
+		{
+			r = 255, g = 0, b = 0;
+		}
+		else if (coeffsum >= 60 && coeffsum <= 69)
+		{
+			r = 255, g = 165, b = 0;
+		}
+		else if (coeffsum >= 70 && coeffsum <= 79)
+		{
+			r = 0, g = 255, b = 0;
+		}
+		else
+		{
+			r = 0, g = 191, b = 255;
+		}
+	}
  
 	char sMessage[256];
 	if (g_iJump[target] <= 6 || g_iJump[target] == 16)
