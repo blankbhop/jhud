@@ -1,89 +1,47 @@
+#include <sourcemod>
 #include <sdktools>
+#include <cstrike>
 #include <sdkhooks>
 #include <clientprefs>
-#include <sourcemod>
+#include <shavit>
 
 #pragma semicolon 1
 #pragma newdecls required
 
-public Plugin myinfo =
+#define PLUGIN_AUTHOR "⌐■_■ fuck knows, code was stolen from 5 ppl and all of them claim the ownership. Fixed by Nairda tho."
+#define PLUGIN_VERSION "1.3.2"
+#define BHOP_TIME 15
+
+EngineVersion g_Game;
+
+Handle g_hCookieEnabled;
+Handle g_hCookieSpeed;
+Handle g_hCookieGain;
+Handle g_hCookieDisplayMode;
+Handle g_hCookieDefault;
+Handle g_hCookieDefaultColour;
+Handle hText;
+
+int g_iJump[MAXPLAYERS +1];
+int g_iStrafeTick[MAXPLAYERS +1];
+int g_iSyncedTick[MAXPLAYERS+1];
+int g_iDisplayMode[MAXPLAYERS + 1];
+int g_iTicksOnGround[MAXPLAYERS + 1]; // Let's count the ticks for scroll
+
+bool g_bEnabled[MAXPLAYERS +1];
+bool g_bTouchesWall[MAXPLAYERS +1];
+bool g_bSpeedColour[MAXPLAYERS + 1] = false;
+bool g_bGainColour[MAXPLAYERS + 1] = false;
+bool g_bDefaultColour[MAXPLAYERS + 1] = true;
+
+float g_flRawGain[MAXPLAYERS +1];
+
+public Plugin myinfo = 
 {
-	name = "jhud",
-	author = "Blank",
-	description = "Center of screen SSJ",
-	version = "0.9.3",
-	url = ""
-};
-
-#define BHOP_TIME 10
-
-Handle g_hCookieJHUD;
-Handle g_hCookieStrafeSpeed;
-Handle g_hCookie60;
-Handle g_hCookie6070;
-Handle g_hCookie7080;
-Handle g_hCookie80;
-Handle g_hCookieDefaultsSet;
-
-bool g_bJHUD[MAXPLAYERS+1];
-bool g_bStrafeSpeed[MAXPLAYERS+1];
-int g_i60[MAXPLAYERS+1];
-int g_i6070[MAXPLAYERS+1];
-int g_i7080[MAXPLAYERS+1];
-int g_i80[MAXPLAYERS+1];
-
-char lastChoice[MAXPLAYERS+1];
-
-bool g_bTouchesWall[MAXPLAYERS+1];
-
-int g_iTicksOnGround[MAXPLAYERS+1];
-int g_iTouchTicks[MAXPLAYERS+1];
-int g_strafeTick[MAXPLAYERS+1];
-int g_iJump[MAXPLAYERS+1];
-
-float g_flRawGain[MAXPLAYERS+1];
-
-#define M_PI 3.14159265358979323846264338327950288
-
-float g_vecLastAngle[MAXPLAYERS + 1][3];
-float g_fTotalNormalDelta[MAXPLAYERS + 1];
-float g_fTotalPerfectDelta[MAXPLAYERS + 1];
-
-enum
-{
-	White,
-	Red,
-	Cyan,
-	Purple,
-	Green,
-	Blue,
-	Yellow,
-	Orange,
-	Gray
-};
-
-int colors[][3] = { 
-	{255, 255, 255}, 	// White
-	{255, 0, 0}, 		// Red
-	{0, 255, 255}, 	// Cyan
-	{128, 0, 128}, 	// Purple
-	{0, 255, 0}, 		// Green
-	{0, 0, 255}, 		// Blue
-	{255, 255, 0}, 	// Yellow
-	{255, 165, 0},	// Orange
-	{128, 128, 128}	// Gray
-};
-
-int values[][3] = { 
-	{}, 			// 0 / placeholder
-	{280, 282, 287},	// 1st
-	{366, 370, 375},	// 2nd
-	{438, 442, 450},	// 3rd
-	{500, 505, 515},	// 4th
-	{555, 560, 570},	// 5th
-	{605, 610, 620},	// 6th
-	{},	{},	{},	{},	{},	{},	{}, {},	{},	// placeholders probably couldve come up with something better w/e
-	{965, 980, 1000}	// 16th
+	name = "Jhud",
+	description = "SSJ in Hud",
+	author = PLUGIN_AUTHOR,
+	version = PLUGIN_VERSION,
 };
 
 public void OnAllPluginsLoaded()
@@ -92,405 +50,300 @@ public void OnAllPluginsLoaded()
 }
 
 public void OnPluginStart()
-{
-	RegConsoleCmd("sm_jhud", Command_JHUD, "JHUD");
-   
-	g_hCookieJHUD = RegClientCookie("jhud_enabled", "jhud_enabled", CookieAccess_Protected);
-	g_hCookieStrafeSpeed = RegClientCookie("jhud_strafespeed", "jhud_strafespeed", CookieAccess_Protected);
-	g_hCookie60 = RegClientCookie("jhud_60", "jhud_60", CookieAccess_Protected);
-	g_hCookie6070 = RegClientCookie("jhud_6070", "jhud_6070", CookieAccess_Protected);
-	g_hCookie7080 = RegClientCookie("jhud_7080", "jhud_7080", CookieAccess_Protected);
-	g_hCookie80 = RegClientCookie("jhud_80", "jhud_80", CookieAccess_Protected);
-	g_hCookieDefaultsSet = RegClientCookie("jhud_defaults", "jhud_defaults", CookieAccess_Protected);
-   
-	for(int i = 1; i <= MaxClients; i++)
+{	
+	g_Game = GetEngineVersion();
+	
+	if(g_Game != Engine_CSGO && g_Game != Engine_CSS)
 	{
-		if(AreClientCookiesCached(i))
+		SetFailState("This plugin is for CSGO/CSS only.");	
+	}
+	
+	RegConsoleCmd("sm_jhud", JumpHudMenuCommand, "A command to open the menu");
+	g_hCookieEnabled = RegClientCookie("jhud_enabled", "jhud_enabled", CookieAccess_Public);
+	g_hCookieSpeed = RegClientCookie("speed_enabled", "speed_enabled", CookieAccess_Public);
+	g_hCookieGain = RegClientCookie("gain_enabled", "gain_enabled", CookieAccess_Public);
+	g_hCookieDisplayMode = RegClientCookie("usagemode", "usagemode", CookieAccess_Public);
+	g_hCookieDefault = RegClientCookie("jhud_default", "jhud_default", CookieAccess_Public);
+	g_hCookieDefaultColour = RegClientCookie("colour_default", "colour_default", CookieAccess_Public);
+
+	for(int iClient = 1; iClient <= MaxClients; iClient++)
+	{
+		if(IsClientInGame(iClient))
 		{
-			OnClientPostAdminCheck(i);
-			OnClientCookiesCached(i);
+			OnClientPutInServer(iClient);
+			OnClientCookiesCached(iClient);
+		}
+	}
+
+	hText = CreateHudSynchronizer();
+}
+
+public void OnClientCookiesCached(int client)
+{	
+	char sCookie[4];
+	GetClientCookie(client, g_hCookieDefault, sCookie, sizeof(sCookie));
+	
+	if(StringToInt(sCookie) == 0)
+	{
+		SetCookie(client, g_hCookieEnabled, false);
+		SetCookie(client, g_hCookieSpeed, false);
+		SetCookie(client, g_hCookieGain, false);
+		SetCookie(client, g_hCookieDisplayMode, 0);
+		SetCookie(client, g_hCookieDefaultColour, true);
+		SetCookie(client, g_hCookieDefault, true);
+	}
+	
+	g_bEnabled[client] = GetCookie(client, g_hCookieEnabled);
+	g_bSpeedColour[client] = GetCookie(client, g_hCookieSpeed);
+	g_bGainColour[client] = GetCookie(client, g_hCookieGain);
+	g_bDefaultColour[client] = GetCookie(client, g_hCookieDefaultColour);
+
+	GetClientCookie(client, g_hCookieDisplayMode, sCookie, sizeof(sCookie));
+
+	g_iDisplayMode[client] = StringToInt(sCookie);
+}
+
+public void OnClientPutInServer(int client)
+{
+	g_iJump[client] = 0; 
+	g_iStrafeTick[client] = 0;
+	g_iSyncedTick[client] = 0;
+	g_flRawGain[client] = 0.0;
+	g_iTicksOnGround[client] = 0;
+
+	SDKHook(client, SDKHook_Touch, TouchingWall);
+}
+
+public void OnClientDisconnect(int client)
+{
+	g_bEnabled[client] = false;
+	g_bSpeedColour[client] = false;
+	g_bGainColour[client] = false;
+}
+
+public Action JumpHudMenuCommand(int client, int args)
+{
+	if(client == 0)
+	{
+		ReplyToCommand(client, "The fuck are you trying to do? Get in game and use the command there instead.");
+		return Plugin_Handled;
+	}
+
+	else
+	{
+		JumpHudMenu(client);
+	}
+	
+	return Plugin_Handled;
+}
+
+void JumpHudMenu(int client)
+{
+	char sBuffer[128];
+	Panel panel = CreatePanel(); // panel cuz menu has no drawtext, and preview with numbers? hell na
+	
+	panel.SetTitle("Jump Hud Menu");
+	panel.DrawText(" ");
+	
+	FormatEx(sBuffer, sizeof(sBuffer), "Enabled [%s]", (g_bEnabled[client]) ? "x" : " ");
+
+	panel.DrawItem(sBuffer);
+	panel.DrawText(" ");
+	
+
+	
+	FormatEx(sBuffer, sizeof(sBuffer), "%s", g_iDisplayMode[client] == 0 ? "Mode: SSJ Only" : g_iDisplayMode[client] == 1 ? "Mode: SSJ | Gain" : "Mode: SSJ | Gain | Sync");
+	panel.DrawItem(sBuffer);
+	
+	panel.DrawText(" ");
+	
+	FormatEx(sBuffer, sizeof(sBuffer), "Default Colour - [%s]", (g_bDefaultColour[client]) ? "x" : " ");
+	panel.DrawItem(sBuffer);
+	
+	FormatEx(sBuffer, sizeof(sBuffer), "Velocity Colour - [%s]", (g_bSpeedColour[client]) ? "x" : " ");
+	panel.DrawItem(sBuffer);
+	
+	FormatEx(sBuffer, sizeof(sBuffer), "Gain Colour - [%s]", (g_bGainColour[client]) ? "x" : " ");
+	panel.DrawItem(sBuffer);
+	
+	panel.DrawItem("", ITEMDRAW_SPACER);
+
+	panel.CurrentKey = 10;
+	panel.DrawItem("Exit                          ", ITEMDRAW_CONTROL);
+	
+	panel.Send(client, JumpHudMenuHandler, 0);
+	
+	CloseHandle(panel);
+}
+
+public int JumpHudMenuHandler(Handle menu, MenuAction action, int client, int item)
+{
+	switch (action)
+	{
+		case MenuAction_Select:
+		{
+			switch (item)
+			{
+				case 1: // jhud on/off
+				{
+					g_bEnabled[client] = !g_bEnabled[client];
+					SetCookie(client, g_hCookieEnabled, g_bEnabled[client]);
+					JumpHudMenu(client);
+				}
+
+				case 2: // switch modes
+				{
+					g_iDisplayMode[client] = (g_iDisplayMode[client] + 1) % 3;
+					SetCookie(client, g_hCookieDisplayMode, g_iDisplayMode[client]);
+					JumpHudMenu(client);
+				}
+
+
+				// color selection shit
+				case 3:
+				{
+					if(g_bGainColour[client] || g_bSpeedColour[client])
+					{
+						g_bGainColour[client] = false;
+						g_bSpeedColour[client] = false;
+						SetCookie(client, g_hCookieSpeed, g_bSpeedColour[client]);
+						SetCookie(client, g_hCookieGain, g_bGainColour[client]);
+						
+						g_bDefaultColour[client] = !g_bDefaultColour[client];
+						SetCookie(client, g_hCookieDefaultColour, g_bDefaultColour[client]);
+						
+					}
+
+					JumpHudMenu(client);
+				}
+
+				case 4:
+				{
+					if(g_bGainColour[client] || g_bDefaultColour[client])
+					{
+						g_bGainColour[client] = false;
+						g_bDefaultColour[client] = false;
+						SetCookie(client, g_hCookieGain, g_bGainColour[client]);
+						SetCookie(client, g_hCookieDefaultColour, g_bDefaultColour[client]);
+						
+						g_bSpeedColour[client] = !g_bSpeedColour[client];
+						SetCookie(client, g_hCookieSpeed, g_bSpeedColour[client]);
+						
+					}
+
+					JumpHudMenu(client);
+				}
+
+				case 5:
+				{
+					if(g_bSpeedColour[client] || g_bDefaultColour[client])
+					{
+						g_bSpeedColour[client] = false;
+						g_bDefaultColour[client] = false;
+						SetCookie(client, g_hCookieSpeed, g_bSpeedColour[client]);
+						SetCookie(client, g_hCookieDefaultColour, g_bDefaultColour[client]);
+						
+						g_bGainColour[client] = !g_bGainColour[client];
+						SetCookie(client, g_hCookieGain, g_bGainColour[client]);
+						
+					}
+
+					JumpHudMenu(client);
+				}
+			}
 		}
 	}
 }
 
-public void OnClientCookiesCached(int client)
+public Action TouchingWall(int client, int entity)
 {
-	char strCookie[8];
+	/* https://github.com/ValveSoftware/source-sdk-2013/blob/master/sp/src/public/engine/ICollideable.h
+		SOLID_NONE = 0, // no solid model
+		SOLID_BSP = 1, // a BSP tree
+		SOLID_BBOX = 2, // an AABB
+		SOLID_OBB = 3, // an OBB (not implemented yet)
+		SOLID_OBB_YAW = 4, // an OBB, constrained so that it can only yaw
+		SOLID_CUSTOM = 5, // Always call into the entity for tests
+		SOLID_VPHYSICS = 6, // solid vphysics object, get vcollide from the model and collide with that
+	*/
 	
-	GetClientCookie(client, g_hCookieDefaultsSet, strCookie, sizeof(strCookie));
-	
-	if(StringToInt(strCookie) == 0)
-	{
-		SetCookie(client, g_hCookieJHUD, false);
-		SetCookie(client, g_hCookieStrafeSpeed, false);
-		SetCookie(client, g_hCookie60, Red);
-		SetCookie(client, g_hCookie6070, Orange);
-		SetCookie(client, g_hCookie7080, Green);
-		SetCookie(client, g_hCookie80, Cyan);
-		SetCookie(client, g_hCookieDefaultsSet, true);
-	}
-	
-	GetClientCookie(client, g_hCookieJHUD, strCookie, sizeof(strCookie));
-	g_bJHUD[client] = view_as<bool>(StringToInt(strCookie));
-
-	GetClientCookie(client, g_hCookieStrafeSpeed, strCookie, sizeof(strCookie));
-	g_bStrafeSpeed[client] = view_as<bool>(StringToInt(strCookie));
-	
-	GetClientCookie(client, g_hCookie60, strCookie, sizeof(strCookie));
-	g_i60[client] = StringToInt(strCookie);
-
-	GetClientCookie(client, g_hCookie6070, strCookie, sizeof(strCookie));
-	g_i6070[client] = StringToInt(strCookie);
-
-	GetClientCookie(client, g_hCookie7080, strCookie, sizeof(strCookie));
-	g_i7080[client] = StringToInt(strCookie);
-
-	GetClientCookie(client, g_hCookie80, strCookie, sizeof(strCookie));
-	g_i80[client] = StringToInt(strCookie);
-}
-
-public void OnClientPostAdminCheck(int client)
-{
-	g_iJump[client] = 0;
-	g_strafeTick[client] = 0;
-	g_flRawGain[client] = 0.0;
-	g_iTicksOnGround[client] = 0;
-	SDKHook(client, SDKHook_Touch, onTouch);
-}
-
-public Action onTouch(int client, int entity)
-{
-	if(!(GetEntProp(entity, Prop_Data, "m_usSolidFlags") & 12))
+	if(!(GetEntProp(entity, Prop_Data, "m_usSolidFlags") & 28))
 	{
 		g_bTouchesWall[client] = true;
 	}
 }
 
-public Action OnPlayerJump(Event event, char[] name, bool dontBroadcast)
+public Action OnPlayerJump(Handle event, const char[] name, bool dontBroadcast)
 {
 	int userid = GetEventInt(event, "userid");
 	int client = GetClientOfUserId(userid);
 
-	if(IsFakeClient(client))
-	{
-		return;   
-	}
-
-	if(g_iJump[client] && g_strafeTick[client] <= 0)
+	if(!IsValidClientIndex(client) || IsFakeClient(client))
 	{
 		return;
 	}
 
-	g_iJump[client]++;
-
-	for(int i=1; i<MaxClients;i++)
+	if(g_iJump[client] && g_iStrafeTick[client] <= 0)
 	{
-		if(IsClientInGame(i) && ((!IsPlayerAlive(i) && GetEntPropEnt(i, Prop_Data, "m_hObserverTarget") == client && GetEntProp(i, Prop_Data, "m_iObserverMode") != 7 && g_bJHUD[i]) || ((i == client && g_bJHUD[i]))))
+		return;
+	}
+
+	g_iJump[client] = Shavit_GetClientJumps(client); 
+
+	for (int iClient = 1; iClient <= MaxClients; iClient++)
+	{
+		if(IsClientInGame(iClient) && !IsFakeClient(iClient) && ((!IsPlayerAlive(iClient) && GetEntPropEnt(iClient, Prop_Data, "m_hObserverTarget") == client && GetEntProp(iClient, Prop_Data, "m_iObserverMode") != 7 && g_bEnabled[iClient]) || (iClient == client && g_bEnabled[iClient])))
 		{
-			JHUD_DrawStats(i, client);
+			JHUD_Print(iClient, client);
 		}
 	}
 
 	g_flRawGain[client] = 0.0;
-	g_strafeTick[client] = 0;
-	g_fTotalNormalDelta[client] = 0.0;
-	g_fTotalPerfectDelta[client] = 0.0;
+	g_iStrafeTick[client] = 0;
+	g_iSyncedTick[client] = 0;
 }
 
-public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon, int &subtype, int &cmdnum, int &tickcount, int &seed, int mouse[2])
-{
-	if(IsFakeClient(client))
-	{
-		return Plugin_Continue;
-	}
-
-	float yaw = NormalizeAngle(angles[1] - g_vecLastAngle[client][1]);
-		
-	float g_vecAbsVelocity[3];
-	GetEntPropVector(client, Prop_Data, "m_vecAbsVelocity", g_vecAbsVelocity);
-	float velocity = GetVectorLength(g_vecAbsVelocity);
-		
-	float wish_angle = FloatAbs(ArcSine(30.0 / velocity)) * 180 / M_PI;
-	
-	if(GetEntityFlags(client) & FL_ONGROUND)
-	{
-		if(g_iTicksOnGround[client] > BHOP_TIME)
-		{
-			g_iJump[client] = 0;
-			g_strafeTick[client] = 0;
-			g_flRawGain[client] = 0.0;
-			g_fTotalNormalDelta[client] = 0.0;
-			g_fTotalPerfectDelta[client] = 0.0;
-		}
-
-		g_iTicksOnGround[client]++;
-
-		if(buttons & IN_JUMP && g_iTicksOnGround[client] == 1)
-		{
-			JHUD_GetStats(client, vel, angles);
-			g_iTicksOnGround[client] = 0;
-		}
-	}
-	else
-	{
-		g_fTotalNormalDelta[client] += FloatAbs(yaw);
-		g_fTotalPerfectDelta[client] += wish_angle;
-
-		if(GetEntityMoveType(client) != MOVETYPE_NONE && GetEntityMoveType(client) != MOVETYPE_NOCLIP && GetEntityMoveType(client) != MOVETYPE_LADDER && GetEntProp(client, Prop_Data, "m_nWaterLevel") < 2)
-		{
-			JHUD_GetStats(client, vel, angles);
-		}
-		g_iTicksOnGround[client] = 0;
-	}
-
-	if(g_bTouchesWall[client])
-	{
-		g_iTouchTicks[client]++;
-		g_bTouchesWall[client] = false;
-	}
-	else 
-	{
-		g_iTouchTicks[client] = 0;
-	}
-
-	g_vecLastAngle[client] = angles;
-
-	return Plugin_Continue;
-}
-
-stock float NormalizeAngle(float ang)
-{
-	if (ang > 180.0)
-	{
-		ang -= 360.0;
-	}
-	else if (ang < -180.0)
-	{
-		ang += 360.0;
-	}
-	
-	return ang;
-}
-
-stock bool IsNaN(float x)
-{
-	return x != x;
-}
-
-public Action Command_JHUD(int client, any args)
-{
-	if(client != 0)
-	{
-		ShowJHUDMenu(client);
-	}
-	return Plugin_Handled;
-}
-
-void ShowJHUDMenu(int client, int position = 0)
-{
-	Menu menu = CreateMenu(JHUD_Select);
-	SetMenuTitle(menu, "JHUD Menu\n \n");
-
-	if(g_bJHUD[client])
-	{
-		AddMenuItem(menu, "usage", "JHUD: [ON]");
-	}
-	else 
-	{
-		AddMenuItem(menu, "usage", "JHUD: [OFF]");
-	}
-	
-	if(g_bStrafeSpeed[client])
-	{
-		AddMenuItem(menu, "strafespeed", "JSS: [ON]\n \n");
-	}
-	else 
-	{
-		AddMenuItem(menu, "strafespeed", "JSS: [OFF]\n \n");
-	}
-
-	AddMenuItem(menu, "< 60 Gain", "< 60 Gain");
-	AddMenuItem(menu, "60-70 Gain", "60-70 Gain");
-	AddMenuItem(menu, "70-80 Gain", "70-80 Gain");
-	AddMenuItem(menu, "> 80 Gain", "> 80 Gain");
-	
-	AddMenuItem(menu, "reset", "Reset to default values");
-	
-	menu.DisplayAt(client, position, MENU_TIME_FOREVER);
-}
-
-public int JHUD_Select(Menu menu, MenuAction action, int client, int option)
-{
-	if(action == MenuAction_Select)
-	{
-		char info[32];
-		GetMenuItem(menu, option, info, sizeof(info));
-		lastChoice = info;
-
-		if(StrEqual(info, "usage"))
-		{
-			g_bJHUD[client] = !g_bJHUD[client];
-			SetCookie(client, g_hCookieJHUD, g_bJHUD[client]);
-			ShowJHUDMenu(client, GetMenuSelectionPosition());
-		}
-		else if(StrEqual(info, "strafespeed"))
-		{
-			g_bStrafeSpeed[client] = !g_bStrafeSpeed[client];
-			SetCookie(client, g_hCookieStrafeSpeed, g_bStrafeSpeed[client]);
-			ShowJHUDMenu(client, GetMenuSelectionPosition());
-		}
-		else if(StrEqual(info, "reset"))
-		{
-			JHUD_ResetValues(client);
-			ShowJHUDMenu(client, GetMenuSelectionPosition());
-		}
-		else
-		{
-			ShowJHUDSettingsMenu(client, GetMenuSelectionPosition());
-		}
-
-	}
-	else if(action == MenuAction_End)
-	{
-		delete menu;
-	}
-}
-
-void ShowJHUDSettingsMenu(int client, int positon = 0)
-{
-	Menu menu = CreateMenu(JHUDSettingsMenu_Handler);
-	SetMenuTitle(menu, "JHUD Menu\nChoice: %s\n \n", lastChoice);
-
-	int selectedColor;
-
-	if(StrEqual(lastChoice, "< 60 Gain"))
-	{
-		selectedColor = g_i60[client];
-	}
-	else if(StrEqual(lastChoice, "60-70 Gain"))
-	{
-		selectedColor = g_i6070[client];
-	}
-	else if(StrEqual(lastChoice, "70-80 Gain"))
-	{
-		selectedColor = g_i7080[client];
-	}
-	else if(StrEqual(lastChoice, "> 80 Gain"))
-	{
-		selectedColor = g_i80[client];
-	}
-
-	AddMenuItem(menu, "0", "White", selectedColor == White ? ITEMDRAW_DISABLED : ITEMDRAW_DEFAULT);
-	AddMenuItem(menu, "1", "Red", selectedColor == Red ? ITEMDRAW_DISABLED : ITEMDRAW_DEFAULT);
-	AddMenuItem(menu, "2", "Cyan", selectedColor == Cyan ? ITEMDRAW_DISABLED : ITEMDRAW_DEFAULT);
-	AddMenuItem(menu, "3", "Purple", selectedColor == Purple ? ITEMDRAW_DISABLED : ITEMDRAW_DEFAULT);
-	AddMenuItem(menu, "4", "Green", selectedColor == Green ? ITEMDRAW_DISABLED : ITEMDRAW_DEFAULT);
-	AddMenuItem(menu, "5", "Blue", selectedColor == Blue ? ITEMDRAW_DISABLED : ITEMDRAW_DEFAULT);
-	AddMenuItem(menu, "6", "Yellow", selectedColor == Yellow ? ITEMDRAW_DISABLED : ITEMDRAW_DEFAULT);
-	AddMenuItem(menu, "7", "Orange", selectedColor == Orange ? ITEMDRAW_DISABLED : ITEMDRAW_DEFAULT);
-	AddMenuItem(menu, "8", "Gray", selectedColor == Gray ? ITEMDRAW_DISABLED : ITEMDRAW_DEFAULT);
-
-	menu.ExitBackButton = true;
-	menu.DisplayAt(client, positon, MENU_TIME_FOREVER);
-}
-
-public int JHUDSettingsMenu_Handler(Menu menu, MenuAction action, int client, int option)
-{
-	if(action == MenuAction_Cancel && option == MenuCancel_ExitBack)
-	{
-		ShowJHUDMenu(client);
-	}
-	else if(action == MenuAction_Select)
-	{
-		char info[32];
-		GetMenuItem(menu, option, info, sizeof(info));
-		int i = StringToInt(info, sizeof(info));
-
-		if(StrEqual(lastChoice, "< 60 Gain"))
-		{
-			g_i60[client] = i;
-			SetCookie(client, g_hCookie60, g_i60[client]);
-		}
-		else if(StrEqual(lastChoice, "60-70 Gain"))
-		{
-			g_i6070[client] = i;
-			SetCookie(client, g_hCookie6070, g_i6070[client]);
-		}
-		else if(StrEqual(lastChoice, "70-80 Gain"))
-		{
-			g_i7080[client] = i;
-			SetCookie(client, g_hCookie7080, g_i7080[client]);
-		}
-		else if(StrEqual(lastChoice, "> 80 Gain"))
-		{
-			g_i80[client] = i;
-			SetCookie(client, g_hCookie80, g_i80[client]);
-		}
-		ShowJHUDSettingsMenu(client, GetMenuSelectionPosition()); 
-	}
-	else if(action == MenuAction_End)
-	{
-		delete menu;
-	}
-}
-
-void JHUD_ResetValues(int client)
-{
-	g_bStrafeSpeed[client] = false;
-	g_i60[client] = Red;
-	g_i6070[client] = Orange;
-	g_i7080[client] = Green;
-	g_i80[client] = Cyan;
-	
-	SetCookie(client, g_hCookieStrafeSpeed, g_bStrafeSpeed[client]);
-	SetCookie(client, g_hCookie60, g_i60[client]);
-	SetCookie(client, g_hCookie6070, g_i6070[client]);
-	SetCookie(client, g_hCookie7080, g_i7080[client]);
-	SetCookie(client, g_hCookie80, g_i80[client]);
-}
-
-void JHUD_GetStats(int client, float vel[3], float angles[3])
+void GetClientStates(int client, float vel[3], float angles[3])
 {
 	float velocity[3];
 	GetEntPropVector(client, Prop_Data, "m_vecAbsVelocity", velocity);
 	
+	g_iStrafeTick[client]++;
+
 	float gaincoeff;
-	g_strafeTick[client]++;
-	
 	float fore[3], side[3], wishvel[3], wishdir[3];
-	float wishspeed, wishspd, currentgain;
-	
+	float wishspeed, wishspd, CurrentGain;
+
 	GetAngleVectors(angles, fore, side, NULL_VECTOR);
-	
+
 	fore[2] = 0.0;
 	side[2] = 0.0;
 	NormalizeVector(fore, fore);
 	NormalizeVector(side, side);
 	
-	for(int i = 0; i < 2; i++)
-	{
+	for (int i = 0; i < 2; i++)
 		wishvel[i] = fore[i] * vel[0] + side[i] * vel[1];
-	}
-	
+
 	wishspeed = NormalizeVector(wishvel, wishdir);
 	if(wishspeed > GetEntPropFloat(client, Prop_Send, "m_flMaxspeed") && GetEntPropFloat(client, Prop_Send, "m_flMaxspeed") != 0.0)
 	{
 		wishspeed = GetEntPropFloat(client, Prop_Send, "m_flMaxspeed");
 	}
-	
+
 	if(wishspeed)
 	{
 		wishspd = (wishspeed > 30.0) ? 30.0 : wishspeed;
-		
-		currentgain = GetVectorDotProduct(velocity, wishdir);
-		if(currentgain < 30.0)
+		CurrentGain = GetVectorDotProduct(velocity, wishdir);
+
+		if(CurrentGain < 30.0)
 		{
-			gaincoeff = (wishspd - FloatAbs(currentgain)) / wishspd;
+			g_iSyncedTick[client]++;
+			gaincoeff = (wishspd - FloatAbs(CurrentGain)) / wishspd;
 		}
 
-		if(g_bTouchesWall[client] && g_iTouchTicks[client] && gaincoeff > 0.5)
+		if(g_bTouchesWall[client] && gaincoeff > 0.5)
 		{
-			gaincoeff -= 1;
+			gaincoeff -= 1.0;
 			gaincoeff = FloatAbs(gaincoeff);
 		}
 
@@ -498,93 +351,229 @@ void JHUD_GetStats(int client, float vel[3], float angles[3])
 	}
 }
 
-void JHUD_DrawStats(int client, int target)
-{
-	float totalPercent = ((g_fTotalNormalDelta[target] / g_fTotalPerfectDelta[target]) * 100.0);
+public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon)
+{	
+	if(IsFakeClient(client)) 
+		return Plugin_Continue;
 
-	float velocity[3];
-	GetEntPropVector(target, Prop_Data, "m_vecAbsVelocity", velocity);
-
-	float coeffsum = g_flRawGain[target];
-	coeffsum /= g_strafeTick[target];
-	coeffsum *= 100.0;
-	
-	coeffsum = RoundToFloor(coeffsum * 100.0 + 0.5) / 100.0;
-
-	int rgb[3];
-
-	char sMessage[256];
-	if(g_iJump[target] <= 6 || g_iJump[target] == 16)
+	if(GetEntityFlags(client) & FL_ONGROUND)
 	{
-		if(RoundToFloor(GetVectorLength(velocity)) < values[g_iJump[target]][0])
+		if(g_iTicksOnGround[client] & BHOP_TIME)
 		{
-			rgb = colors[g_i60[client]];
-		}
-		else if(RoundToFloor(GetVectorLength(velocity)) >= values[g_iJump[target]][0] && RoundToFloor(GetVectorLength(velocity)) < values[g_iJump[target]][1])
-		{
-			rgb = colors[g_i6070[client]];
-		}
-		else if(RoundToFloor(GetVectorLength(velocity)) >= values[g_iJump[target]][1] && RoundToFloor(GetVectorLength(velocity)) < values[g_iJump[target]][2])
-		{
-			rgb = colors[g_i7080[client]];
-		}
-		else
-		{
-			rgb = colors[g_i80[client]];
+			g_iJump[client] = 0;
+			g_iStrafeTick[client] = 0;
+			g_flRawGain[client] = 0.0;
+			g_iSyncedTick[client] = 0;
 		}
 
-		if(!IsNaN(totalPercent) && g_bStrafeSpeed[client])
+		g_iTicksOnGround[client]++;
+		if(buttons & IN_JUMP && (g_iTicksOnGround[client] & BHOP_TIME))
 		{
-			Format(sMessage, sizeof(sMessage), "%i: %i (%.0f%%%%)", g_iJump[target], RoundToFloor(GetVectorLength(velocity)), totalPercent);
-		}
-		else
-		{
-			Format(sMessage, sizeof(sMessage), "%i: %i", g_iJump[target], RoundToFloor(GetVectorLength(velocity)));
+			GetClientStates(client, vel, angles);
+			g_iTicksOnGround[client] = 0;
 		}
 	}
-	else
+
+	else 
 	{
-		if(coeffsum < 60)
+		if(GetEntityMoveType(client) != MOVETYPE_NONE && GetEntityMoveType(client) != MOVETYPE_NOCLIP && GetEntityMoveType(client) != MOVETYPE_LADDER && GetEntProp(client, Prop_Data, "m_nWaterLevel") < 2)
 		{
-			rgb = colors[g_i60[client]];
-		}
-		else if(coeffsum >= 60 && coeffsum < 70)
-		{
-			rgb = colors[g_i6070[client]];
-		}
-		else if(coeffsum >= 70 && coeffsum < 80)
-		{
-			rgb = colors[g_i7080[client]];
-		}
-		else
-		{
-			rgb = colors[g_i80[client]];
+			GetClientStates(client, vel, angles);
 		}
 
-		if(!IsNaN(totalPercent) && g_bStrafeSpeed[client])
-		{
-			Format(sMessage, sizeof(sMessage), "%.2f%%%% (%.0f%%%%)", coeffsum, totalPercent);
-		}
-		else
-		{
-			Format(sMessage, sizeof(sMessage), "%.2f%%", coeffsum);
-		}
+		g_iTicksOnGround[client] = 0;
 	}
- 	
-	SetHudTextParams(-1.0, 0.4, 1.0, rgb[0], rgb[1], rgb[2], 255, 0, 0.0, 0.0, 0.2);
-	ShowHudText(client, 2, sMessage);
+
+	g_bTouchesWall[client] = false;
+
+	return Plugin_Continue;
 }
 
-stock bool GetClientCookieBool(int client, Handle cookie)
+void JHUD_Print(int client, int target)
+{	
+	float velocity[3], origin[3];
+	GetEntPropVector(target, Prop_Data, "m_vecAbsVelocity", velocity);
+	GetClientAbsOrigin(target, origin);
+	velocity[2] = 0.0;
+
+	float f_CoefficientSum = g_flRawGain[target];
+	f_CoefficientSum /= g_iStrafeTick[target];
+	f_CoefficientSum *= 100.0;
+	f_CoefficientSum = RoundToFloor(f_CoefficientSum * 100.0 + 0.5) / 100.0;
+
+	// lame fix to the fucking shit -8239742482% gain on a jump. This needs fixing for sure. I think (?).
+	if(g_iTicksOnGround[client] & BHOP_TIME)
+	{
+		f_CoefficientSum = 0.0;
+	}
+	
+	char JHUDText[255];
+	// SSJ Only
+	if(g_iDisplayMode[client] == 0)
+	{
+		if(g_iJump[target] == 1)
+		{
+			FormatEx(JHUDText, sizeof(JHUDText), "J: %i\nPre: %i", g_iJump[target], RoundToFloor(GetVectorLength(velocity)));
+		}
+		
+		else
+		{
+			FormatEx(JHUDText, sizeof(JHUDText), "J: %i\nSpd: %i", g_iJump[target], RoundToFloor(GetVectorLength(velocity)));
+		}
+	}
+
+	// SSJ, Gain%
+	else if(g_iDisplayMode[client] == 1)
+	{
+		if(g_iJump[target] == 1)
+		{
+			FormatEx(JHUDText, sizeof(JHUDText), "J: %i\nPre: %i", g_iJump[target], RoundToFloor(GetVectorLength(velocity)));
+		}
+
+		else
+		{
+			FormatEx(JHUDText, sizeof(JHUDText), "J: %i | Gn\n%i | %.0f%", g_iJump[target], RoundToFloor(GetVectorLength(velocity)), f_CoefficientSum);
+		}
+	}
+
+	// SSJ, Gain%, Sync%
+	else if(g_iDisplayMode[client] == 2)
+	{
+		if(g_iJump[target] == 1)
+		{
+			FormatEx(JHUDText, sizeof(JHUDText), "J: %i | PreSpeed %i", g_iJump[target], RoundToFloor(GetVectorLength(velocity)));
+		}
+
+		else
+		{
+			FormatEx(JHUDText, sizeof(JHUDText), "J: %i | Gain | Sync\nV: %i | %05.2f%%%%%%% | %05.2f%%", g_iJump[target], RoundToFloor(GetVectorLength(velocity)), f_CoefficientSum, 100.0 * g_iSyncedTick[target] / g_iStrafeTick[target]); // Pawn stuff I guess XDDDDD
+		}
+	}
+	
+	int newvelocity = RoundToFloor(GetVectorLength(velocity));
+	int r, g, b;
+	
+	if(g_bDefaultColour[client])
+	{
+		if(g_iJump[target] <= 6 || g_iJump[target] == 16)
+		{
+			GetSpeedColour(g_iJump[target], newvelocity, r, g, b);
+		}
+
+		else
+		{
+			GetGainColour(f_CoefficientSum, r, g, b);
+		}
+	}
+
+	else if(g_bSpeedColour[client])
+	{
+		//Use speed as colour
+		GetSpeedColour(g_iJump[target], newvelocity, r, g, b);
+	}
+
+	else if(g_bGainColour[client])
+	{
+		//Use gain as colour
+		if(g_iJump[target] == 1)
+		{
+			GetSpeedColour(g_iJump[target], newvelocity, r, g, b);
+		}
+
+		else
+		{
+			GetGainColour(f_CoefficientSum, r, g, b);
+		}
+	}
+	
+	// print the text
+	if(hText != INVALID_HANDLE)
+	{
+		SetHudTextParams(-1.0, -1.0, 1.0, r, g, b, 255);
+		ShowSyncHudText(client, hText, JHUDText);
+	}
+}
+
+void GetGainColour(float gain, int &r, int &g, int &b)
+{	
+	if(gain < 60.00)
+	{
+		r = 255;
+		g = 0;		//red
+		b = 0;
+	}
+
+	else if(60.00 <= gain < 70.00)
+	{
+		r = 255;
+		g = 126;	//orange
+		b = 0;
+	}
+
+	else if(70.00 <= gain < 80.00)
+	{
+		r = 0;
+		g = 255;	//green
+		b = 0;
+	}
+
+	else
+	{
+		r = 0;
+		g = 255;	//blue
+		b = 255;
+	}
+}
+
+void GetSpeedColour(int jump, int speed, int &r, int &g, int &b)
 {
+	if((jump == 1 && 280 <= speed < 282) || (jump == 2 && 366 <= speed < 370) || (jump == 3 && 438 <= speed < 442) || (jump == 4 && 500 <= speed < 505) || (jump == 5 && 555 <= speed < 560) || (jump == 6 && 605 <= speed < 610) ||  (jump == 16 && 965 <= speed < 980))
+	{
+		r = 255;
+		g = 126; //orange
+		b = 0;
+	}
+
+	else if((jump == 1 && 282 <= speed < 287) || (jump == 2 && 370 <= speed < 375) || (jump == 3 && 442 <= speed < 450) || (jump == 4 && 505 <= speed < 515) || (jump == 5 && 560 <= speed < 570) || (jump == 6 && 610 <= speed < 620) || (jump == 16 && 980 <= speed < 1000))
+	{
+		r = 0;
+		g = 255; //green
+		b = 0;
+	}
+
+	else if((jump == 1 && speed >= 287) || (jump == 2 && speed >= 375) || (jump == 3 && speed >= 450) || (jump == 4 && speed >= 515) || (jump == 5 && speed >= 570) || (jump == 6 && speed >= 620) || (jump == 16 && speed >= 1000))
+	{
+		r = 0;
+		g = 255; //blue
+		b = 255;
+	}
+
+	else
+	{
+		r = 255;
+		g = 0;	//red
+		b = 0;
+	}
+}
+
+stock bool GetCookie(int client, Handle cookie)
+{	
 	char sValue[8];
-	GetClientCookie(client, g_hCookieJHUD, sValue, sizeof(sValue));
+	GetClientCookie(client, cookie, sValue, sizeof(sValue));
+	
 	return (sValue[0] != '\0' && StringToInt(sValue));
 }
 
 stock void SetCookie(int client, Handle hCookie, int n)
 {
 	char strCookie[64];
+	
 	IntToString(n, strCookie, sizeof(strCookie));
 	SetClientCookie(client, hCookie, strCookie);
+}
+
+// We don't want the -1 client id bug. Thank Volvo™ for this
+stock bool IsValidClientIndex(int client)
+{
+    return (0 < client <= MaxClients);
 }
