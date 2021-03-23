@@ -3,4 +3,4 @@
 
 ## Credits
 ### Blank - Functionality of plugin
-### [One](https://steamcommunity.com/id/One/) - Functionality of the menu
+### [One](https://steamcommunity.com/id/One/) - Functionality of the beta versions menu
