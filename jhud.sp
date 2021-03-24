@@ -1,22 +1,25 @@
-#include <sdktools>
-#include <sdkhooks>
-#include <clientprefs>
 #include <sourcemod>
+#include <clientprefs>
+#include <sdkhooks>
+#include <sdktools>
 
 #pragma semicolon 1
 #pragma newdecls required
 
 public Plugin myinfo = 
 {
-	name = "jhud", 
+	name = "Jump Hud", 
 	author = "Blank", 
-	description = "Center of screen SSJ", 
-	version = "1.0.0", 
+	description = "Center of screen jump stats", 
+	version = "1.1.0", 
 	url = ""
 }
 
+#define M_PI 3.14159265358979323846264338327950288
 #define BHOP_TIME 10
 
+Handle g_hCookieConstantSpeed;
+Handle g_hCookieConstSpeedType;
 Handle g_hCookieJHUD;
 Handle g_hCookieJHUDPosition;
 Handle g_hCookieStrafeSpeed;
@@ -28,6 +31,8 @@ Handle g_hCookie7080;
 Handle g_hCookie80;
 Handle g_hCookieDefaultsSet;
 
+bool g_bConstSpeed[MAXPLAYERS + 1];
+bool g_bConstSpeedType[MAXPLAYERS + 1];
 bool g_bJHUD[MAXPLAYERS + 1];
 bool g_bStrafeSpeed[MAXPLAYERS + 1];
 bool g_bExtraJumps[MAXPLAYERS + 1];
@@ -43,14 +48,13 @@ char lastChoice[MAXPLAYERS + 1];
 bool g_bSpeedDiff[MAXPLAYERS + 1];
 bool g_bTouchesWall[MAXPLAYERS + 1];
 
+int g_iPrevSpeed[MAXPLAYERS + 1];
 int g_iTicksOnGround[MAXPLAYERS + 1];
 int g_iTouchTicks[MAXPLAYERS + 1];
 int g_strafeTick[MAXPLAYERS + 1];
 int g_iJump[MAXPLAYERS + 1];
 
 float g_flRawGain[MAXPLAYERS + 1];
-
-#define M_PI 3.14159265358979323846264338327950288
 
 float g_vecLastAngle[MAXPLAYERS + 1][3];
 float g_fTotalNormalDelta[MAXPLAYERS + 1];
@@ -69,36 +73,36 @@ enum
 	Gray
 };
 
-int colors[][3] =  {
-	{ 255, 255, 255 },  // White
-	{ 255, 0, 0 },  	// Red
-	{ 0, 255, 255 },  	// Cyan
-	{ 128, 0, 128 },  	// Purple
-	{ 0, 255, 0 },  	// Green
-	{ 0, 0, 255 }, 		// Blue
-	{ 255, 255, 0 }, 	// Yellow
-	{ 255, 165, 0 }, 	// Orange
-	{ 128, 128, 128 } 	// Gray
+int colors[][3] = {
+	{255, 255, 255},  	// White
+	{255, 0, 0},  		// Red
+	{0, 255, 255},  	// Cyan
+	{128, 0, 128},  	// Purple
+	{0, 255, 0},  		// Green
+	{0, 0, 255}, 		// Blue
+	{255, 255, 0}, 		// Yellow
+	{255, 165, 0}, 		// Orange
+	{128, 128, 128} 	// Gray
 };
 
-int values[][3] =  {
-	{  },  				// null
-	{ 280, 282, 287 },  // 1
-	{ 366, 370, 375 },  // 2
-	{ 438, 442, 450 },  // 3
-	{ 500, 505, 515 },  // 4
-	{ 555, 560, 570 },  // 5
-	{ 605, 610, 620 },  // 6
-	{ 655, 665, 675 },  // 7
-	{ 700, 710, 725 },  // 8
-	{ 740, 750, 765 },  // 9
-	{ 780, 790, 805 },  // 10
-	{ 810, 820, 840 },  // 11
-	{ 850, 860, 875 },  // 12
-	{ 880, 900, 900 },  // 13
-	{ 910, 920, 935 },  // 14
-	{ 945, 955, 965 },  // 15
-	{ 970, 980, 1000 } 	// 16
+int values[][3] = {
+	{},  				// null
+	{280, 282, 287},  	// 1
+	{366, 370, 375},  	// 2
+	{438, 442, 450},  	// 3
+	{500, 505, 515},  	// 4
+	{555, 560, 570},  	// 5
+	{605, 610, 620},  	// 6
+	{655, 665, 675},  	// 7
+	{700, 710, 725}, 	// 8
+	{740, 750, 765},  	// 9
+	{780, 790, 805},  	// 10
+	{810, 820, 840},  	// 11
+	{850, 860, 875},  	// 12
+	{880, 900, 900},  	// 13
+	{910, 920, 935},  	// 14
+	{945, 955, 965},  	// 15
+	{970, 980, 1000} 	// 16
 };
 
 public void OnAllPluginsLoaded()
@@ -108,18 +112,20 @@ public void OnAllPluginsLoaded()
 
 public void OnPluginStart()
 {
-	RegConsoleCmd("sm_jhud", Command_JHUD, "JHUD");
+	RegConsoleCmd("sm_jhud", Command_JHUD, "Opens the JHUD main menu");
 	
-	g_hCookieJHUD = 		RegClientCookie("jhud_enabled", "jhud_enabled", CookieAccess_Protected);
-	g_hCookieJHUDPosition = RegClientCookie("jhud_position", "jhud_position", CookieAccess_Protected);
-	g_hCookieStrafeSpeed = 	RegClientCookie("jhud_strafespeed", "jhud_strafespeed", CookieAccess_Protected);
-	g_hCookieExtraJumps = 	RegClientCookie("jhud_extrajumps", "jhud_extrajumps", CookieAccess_Protected);
-	g_hCookieSpeedDisplay = RegClientCookie("jhud_speeddisp", "jhud_speeddisp", CookieAccess_Protected);
-	g_hCookie60 = 			RegClientCookie("jhud_60", "jhud_60", CookieAccess_Protected);
-	g_hCookie6070 = 		RegClientCookie("jhud_6070", "jhud_6070", CookieAccess_Protected);
-	g_hCookie7080 = 		RegClientCookie("jhud_7080", "jhud_7080", CookieAccess_Protected);
-	g_hCookie80 = 			RegClientCookie("jhud_80", "jhud_80", CookieAccess_Protected);
-	g_hCookieDefaultsSet = 	RegClientCookie("jhud_defaults", "jhud_defaults", CookieAccess_Protected);
+	g_hCookieConstantSpeed = 	RegClientCookie("jhud_constspeed", "jhud_constspeed", CookieAccess_Protected);
+	g_hCookieConstSpeedType = 	RegClientCookie("jhud_constspeedtype", "jhud_constspeedtype", CookieAccess_Protected);
+	g_hCookieJHUD = 			RegClientCookie("jhud_enabled", "jhud_enabled", CookieAccess_Protected);
+	g_hCookieJHUDPosition = 	RegClientCookie("jhud_position", "jhud_position", CookieAccess_Protected);
+	g_hCookieStrafeSpeed = 		RegClientCookie("jhud_strafespeed", "jhud_strafespeed", CookieAccess_Protected);
+	g_hCookieExtraJumps = 		RegClientCookie("jhud_extrajumps", "jhud_extrajumps", CookieAccess_Protected);
+	g_hCookieSpeedDisplay = 	RegClientCookie("jhud_speeddisp", "jhud_speeddisp", CookieAccess_Protected);
+	g_hCookie60 = 				RegClientCookie("jhud_60", "jhud_60", CookieAccess_Protected);
+	g_hCookie6070 = 			RegClientCookie("jhud_6070", "jhud_6070", CookieAccess_Protected);
+	g_hCookie7080 = 			RegClientCookie("jhud_7080", "jhud_7080", CookieAccess_Protected);
+	g_hCookie80 = 				RegClientCookie("jhud_80", "jhud_80", CookieAccess_Protected);
+	g_hCookieDefaultsSet = 		RegClientCookie("jhud_defaults", "jhud_defaults", CookieAccess_Protected);
 	
 	for(int i = 1; i <= MaxClients; i++)
 	{
@@ -139,6 +145,8 @@ public void OnClientCookiesCached(int client)
 	
 	if(StringToInt(strCookie) == 0)
 	{
+		SetCookie(client, g_hCookieConstantSpeed, false);
+		SetCookie(client, g_hCookieConstSpeedType, false);
 		SetCookie(client, g_hCookieJHUD, false);
 		SetCookie(client, g_hCookieStrafeSpeed, false);
 		SetCookie(client, g_hCookieExtraJumps, false);
@@ -150,6 +158,12 @@ public void OnClientCookiesCached(int client)
 		SetCookie(client, g_hCookie80, Cyan);
 		SetCookie(client, g_hCookieDefaultsSet, true);
 	}
+	
+	GetClientCookie(client, g_hCookieConstantSpeed, strCookie, sizeof(strCookie));
+	g_bConstSpeed[client] = view_as<bool>(StringToInt(strCookie));
+	
+	GetClientCookie(client, g_hCookieConstSpeedType, strCookie, sizeof(strCookie));
+	g_bConstSpeedType[client] = view_as<bool>(StringToInt(strCookie));
 	
 	GetClientCookie(client, g_hCookieJHUD, strCookie, sizeof(strCookie));
 	g_bJHUD[client] = view_as<bool>(StringToInt(strCookie));
@@ -234,9 +248,8 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 		return Plugin_Continue;
 	}
 	
-	float yaw = NormalizeAngle(angles[1] - g_vecLastAngle[client][1]);
-	
 	float g_vecAbsVelocity[3];
+	float yaw = NormalizeAngle(angles[1] - g_vecLastAngle[client][1]);
 	GetEntPropVector(client, Prop_Data, "m_vecAbsVelocity", g_vecAbsVelocity);
 	float velocity = GetVectorLength(g_vecAbsVelocity);
 	
@@ -287,6 +300,35 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 	}
 	
 	g_vecLastAngle[client] = angles;
+	
+	if(g_bConstSpeed[client])
+	{
+		int speed = FormatSpeed(client);
+		if(g_bConstSpeedType[client])
+		{
+			if(g_iTicksOnGround[client] > BHOP_TIME)
+			{
+				if(speed == g_iPrevSpeed[client])
+				{
+					return Plugin_Continue;
+				}
+				return Plugin_Continue;
+			}
+		}
+		
+		char diff[64];
+		if(speed >= g_iPrevSpeed[client])
+		{
+			Format(diff, sizeof(diff), "+");
+		}
+		else
+		{
+			Format(diff, sizeof(diff), "-");
+		}
+		PrintCenterText(client, "\n \n \n%s%i", diff, speed);
+		
+		g_iPrevSpeed[client] = speed;
+	}
 	
 	return Plugin_Continue;
 }
@@ -342,15 +384,6 @@ void ShowJHUDMenu(int client, int position = 0)
 		AddMenuItem(menu, "strafespeed", "JSS: [OFF]");
 	}
 	
-	if(g_bExtraJumps[client])
-	{
-		AddMenuItem(menu, "extrajumps", "Extra Jumps: [ON]\n \n");
-	}
-	else
-	{
-		AddMenuItem(menu, "extrajumps", "Extra Jumps: [OFF]\n \n");
-	}
-	
 	AddMenuItem(menu, "settings", "Settings");
 	
 	menu.DisplayAt(client, position, MENU_TIME_FOREVER);
@@ -374,12 +407,6 @@ public int JHUD_Select(Menu menu, MenuAction action, int client, int option)
 		{
 			g_bStrafeSpeed[client] = !g_bStrafeSpeed[client];
 			SetCookie(client, g_hCookieStrafeSpeed, g_bStrafeSpeed[client]);
-			ShowJHUDMenu(client, GetMenuSelectionPosition());
-		}
-		else if(StrEqual(info, "extrajumps"))
-		{
-			g_bExtraJumps[client] = !g_bExtraJumps[client];
-			SetCookie(client, g_hCookieExtraJumps, g_bExtraJumps[client]);
 			ShowJHUDMenu(client, GetMenuSelectionPosition());
 		}
 		else if(StrEqual(info, "settings"))
@@ -417,9 +444,19 @@ void ShowJHUDDisplayOptionsMenu(int client, int position = 0)
 	}
 	else
 	{
-		AddMenuItem(menu, "speeddisp", "Strafe Analyzer: [OFF]\n");
+		AddMenuItem(menu, "speeddisp", "Strafe Analyzer: [OFF]");
 	}
 	
+	if(g_bExtraJumps[client])
+	{
+		AddMenuItem(menu, "extrajumps", "Extra Jumps: [ON]\n \n");
+	}
+	else
+	{
+		AddMenuItem(menu, "extrajumps", "Extra Jumps: [OFF]\n \n");
+	}
+	
+	AddMenuItem(menu, "constspeed", "Constant Speed Settings");
 	AddMenuItem(menu, "colors", "Color Settings\n \n");
 	AddMenuItem(menu, "reset", "Reset to default values");
 	
@@ -437,18 +474,9 @@ public int JHUDDisplayOptionsMenu_Handler(Menu menu, MenuAction action, int clie
 	{
 		char info[32];
 		GetMenuItem(menu, option, info, sizeof(info));
+		lastChoice = info;
 		
-		if(StrEqual(info, "colors"))
-		{
-			ShowJHUDColorMenu(client);
-		}
-		else if(StrEqual(info, "speeddisp"))
-		{
-			g_bSpeedDisplay[client] = !g_bSpeedDisplay[client];
-			SetCookie(client, g_hCookieSpeedDisplay, g_bSpeedDisplay[client]);
-			ShowJHUDDisplayOptionsMenu(client);
-		}
-		else if(StrEqual(info, "cyclepos"))
+		if(StrEqual(info, "cyclepos"))
 		{
 			if(++g_iJHUDPosition[client] < 3)
 			{
@@ -462,10 +490,87 @@ public int JHUDDisplayOptionsMenu_Handler(Menu menu, MenuAction action, int clie
 				ShowJHUDDisplayOptionsMenu(client);
 			}
 		}
+		else if(StrEqual(info, "speeddisp"))
+		{
+			g_bSpeedDisplay[client] = !g_bSpeedDisplay[client];
+			SetCookie(client, g_hCookieSpeedDisplay, g_bSpeedDisplay[client]);
+			ShowJHUDDisplayOptionsMenu(client);
+		}
+		else if(StrEqual(info, "extrajumps"))
+		{
+			g_bExtraJumps[client] = !g_bExtraJumps[client];
+			SetCookie(client, g_hCookieExtraJumps, g_bExtraJumps[client]);
+			ShowJHUDDisplayOptionsMenu(client, GetMenuSelectionPosition());
+		}
+		else if(StrEqual(info, "constspeed"))
+		{
+			ShowJHUDConstSpeedMenu(client);
+		}
+		else if(StrEqual(info, "colors"))
+		{
+			ShowJHUDColorMenu(client);
+		}
 		else if(StrEqual(info, "reset"))
 		{
 			JHUD_ResetMenu(client);
-			JHUD_ResetValues(client);
+		}
+	}
+	else if(action == MenuAction_End)
+	{
+		delete menu;
+	}
+}
+
+void ShowJHUDConstSpeedMenu(int client, int position = 0)
+{
+	Menu menu = CreateMenu(ShowJHUDConstSpeedMenu_Handler);
+	SetMenuTitle(menu, "JHUD - Settings - Constant Speed\n \n");
+	
+	if(g_bConstSpeed[client])
+	{
+		AddMenuItem(menu, "constspeed", "Constant Speed: [ON]");
+	}
+	else
+	{
+		AddMenuItem(menu, "constspeed", "Constant Speed: [OFF]");
+	}
+	
+	if(g_bConstSpeedType[client])
+	{
+		AddMenuItem(menu, "constspeedtype", "Constant Speed Type: [AIR ONLY]");
+	}
+	else
+	{
+		AddMenuItem(menu, "constspeedtype", "Constant Speed Type: [AIR & GROUND]");
+	}
+	
+	menu.ExitBackButton = true;
+	menu.DisplayAt(client, position, MENU_TIME_FOREVER);
+}
+
+public int ShowJHUDConstSpeedMenu_Handler(Menu menu, MenuAction action, int client, int option)
+{
+	if(action == MenuAction_Cancel && option == MenuCancel_ExitBack)
+	{
+		ShowJHUDDisplayOptionsMenu(client);
+	}
+	if(action == MenuAction_Select)
+	{
+		char info[32];
+		GetMenuItem(menu, option, info, sizeof(info));
+		lastChoice = info;
+		
+		if(StrEqual(info, "constspeed"))
+		{
+			g_bConstSpeed[client] = !g_bConstSpeed[client];
+			SetCookie(client, g_hCookieConstantSpeed, g_bConstSpeed[client]);
+			ShowJHUDConstSpeedMenu(client);
+		}
+		else if(StrEqual(info, "constspeedtype"))
+		{
+			g_bConstSpeedType[client] = !g_bConstSpeedType[client];
+			SetCookie(client, g_hCookieConstSpeedType, g_bConstSpeedType[client]);
+			ShowJHUDConstSpeedMenu(client);
 		}
 	}
 	else if(action == MenuAction_End)
@@ -477,7 +582,7 @@ public int JHUDDisplayOptionsMenu_Handler(Menu menu, MenuAction action, int clie
 void ShowJHUDColorMenu(int client, int position = 0)
 {
 	Menu menu = CreateMenu(JHUDColorMenu_Handler);
-	SetMenuTitle(menu, "JHUD - Settings - Color\n \n", lastChoice);
+	SetMenuTitle(menu, "JHUD - Settings - Color\n \n");
 	
 	AddMenuItem(menu, "< 60 Gain", "< 60 Gain");
 	AddMenuItem(menu, "60-70 Gain", "60-70 Gain");
@@ -557,6 +662,7 @@ public int JHUDSettingsMenu_Handler(Menu menu, MenuAction action, int client, in
 		char info[32];
 		GetMenuItem(menu, option, info, sizeof(info));
 		int i = StringToInt(info, sizeof(info));
+		lastChoice = info;
 		
 		if(StrEqual(lastChoice, "< 60 Gain"))
 		{
@@ -608,6 +714,8 @@ public int JHUD_ResetMenu_Handler(Menu menu, MenuAction action, int client, int 
 	{
 		char info[32];
 		GetMenuItem(menu, option, info, sizeof(info));
+		lastChoice = info;
+		
 		if(StrEqual(info, "yes"))
 		{
 			JHUD_ResetValues(client);
@@ -626,19 +734,23 @@ public int JHUD_ResetMenu_Handler(Menu menu, MenuAction action, int client, int 
 
 void JHUD_ResetValues(int client)
 {
-	g_iJHUDPosition[client] = 0;
+	g_bConstSpeed[client] = false;
+	g_bConstSpeedType[client] = false;
 	g_bStrafeSpeed[client] = false;
 	g_bExtraJumps[client] = false;
 	g_bSpeedDisplay[client] = false;
+	g_iJHUDPosition[client] = 0;
 	g_i60[client] = Red;
 	g_i6070[client] = Orange;
 	g_i7080[client] = Green;
 	g_i80[client] = Cyan;
 	
-	SetCookie(client, g_hCookieJHUDPosition, g_iJHUDPosition[client]);
+	SetCookie(client, g_hCookieConstantSpeed, g_bConstSpeed[client]);
+	SetCookie(client, g_hCookieConstSpeedType, g_bConstSpeedType[client]);
 	SetCookie(client, g_hCookieStrafeSpeed, g_bStrafeSpeed[client]);
 	SetCookie(client, g_hCookieExtraJumps, g_bExtraJumps[client]);
 	SetCookie(client, g_hCookieSpeedDisplay, g_bSpeedDisplay[client]);
+	SetCookie(client, g_hCookieJHUDPosition, g_iJHUDPosition[client]);
 	SetCookie(client, g_hCookie60, g_i60[client]);
 	SetCookie(client, g_hCookie6070, g_i6070[client]);
 	SetCookie(client, g_hCookie7080, g_i7080[client]);
@@ -889,6 +1001,14 @@ stock void GetStrafeEval(int client, float x)
 	}
 }
 
+stock int FormatSpeed(int client)
+{
+    float vel[3];
+    GetEntPropVector(client, Prop_Data, "m_vecVelocity", vel);
+
+    return RoundToNearest(SquareRoot(vel[0] * vel[0] + vel[1] * vel[1]));
+}
+
 stock bool GetClientCookieBool(int client, Handle cookie)
 {
 	char sValue[8];
@@ -901,4 +1021,4 @@ stock void SetCookie(int client, Handle hCookie, int n)
 	char strCookie[64];
 	IntToString(n, strCookie, sizeof(strCookie));
 	SetClientCookie(client, hCookie, strCookie);
-} 
+}
